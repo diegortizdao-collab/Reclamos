@@ -207,16 +207,38 @@ function vImp(){
         try{for(let i=0;i<L.length;i+=300){const r=await api('/reclamos/importar',{method:'PUT',json:{reclamos:L.slice(i,i+300),sobrescribir:sob}});g+=r.guardados||0;$('#p1').innerHTML=`<div class="msg i">Guardados ${g} de ${L.length}…</div>`}
           await cargar();$('#p1').innerHTML=`<div class="msg o">Listo: ${g} reclamos guardados.</div>`}catch(x){$('#p1').innerHTML=`<div class="msg e">${esc(x.message)}</div>`}}}
     catch(x){o.innerHTML=`<div class="msg e">${esc(x.message)}</div>`}};
-  $('#i2').onchange=async e=>{const o=$('#r2');o.innerHTML='<div class="msg i">Preparando…</div>';const cand={};
-    const reg=(nom,fecha,get)=>{const m=/reclamo\s*\((\d{1,5}(?:-[a-z])?)\)/i.exec(nom)||/reclamo[^\d]{0,6}(\d{1,5}(?:-[a-z])?)/i.exec(nom);if(!m||/^~\$/.test(nom.split('/').pop()))return;const n=m[1].toLowerCase();if(!cand[n]||fecha>cand[n].fecha)cand[n]={nom,fecha,get}};
+  $('#i2').onchange=async e=>{const o=$('#r2');o.innerHTML='<div class="msg i">Leyendo los Word…</div>';const items=[];
     for(const f of e.target.files){
-      if(/\.zip$/i.test(f.name)){const z=await JSZip.loadAsync(await f.arrayBuffer());z.forEach((p,en)=>{if(!en.dir&&/\.docx$/i.test(p))reg(p,+en.date,()=>en.async('arraybuffer'))})}
-      else reg(f.name,f.lastModified,()=>f.arrayBuffer())}
-    const nums=Object.keys(cand).sort((a,b)=>parseInt(a)-parseInt(b));const ex=new Set(S.datos.map(r=>r.numero));
-    const sin=nums.filter(n=>!ex.has(n));
-    o.innerHTML=`<div class="msg i">${nums.length} A.37 detectados${sin.length?` · <b>${sin.length} sin reclamo en el A.03</b> (${sin.slice(0,15).join(', ')}${sin.length>15?'…':''}): importá primero el A.03`:''}</div><button class="b" id="g2">Subir ${nums.length-sin.length}</button><div id="p2"></div>`;
-    $('#g2').onclick=async()=>{$('#g2').disabled=true;let ok=0;const err=[];for(const n of nums){if(!ex.has(n))continue;try{await subirA37(n,await cand[n].get());ok++}catch(x){err.push(n+': '+x.message)}$('#p2').innerHTML=`<div class="msg i">${ok} subidos…</div>`}
-      await cargar();$('#p2').innerHTML=`<div class="msg ${err.length?'e':'o'}">${ok} A.37 guardados.${err.length?'<br>'+err.map(esc).join('<br>'):''}</div>`}};
+      if(/\.zip$/i.test(f.name)){const z=await JSZip.loadAsync(await f.arrayBuffer());z.forEach((p,en)=>{if(!en.dir&&/\.docx$/i.test(p)&&!/(^|\/)~\$/.test(p))items.push({nom:p,fecha:+en.date,get:()=>en.async('arraybuffer')})})}
+      else if(/\.docx$/i.test(f.name)&&!/^~\$/.test(f.name))items.push({nom:f.name,fecha:f.lastModified,get:()=>f.arrayBuffer()})}
+    const ex=new Set(S.datos.map(r=>r.numero)),cand={},sinId=[],difiere=[];let leidos=0;
+    for(const it of items){
+      let num=null,cli='';
+      try{const z=await JSZip.loadAsync(await it.get());const x=await z.file('word/document.xml').async('string');
+        const cel=x.split('</w:tc>').map(c=>(c.match(/<w:t[ >][^<]*|<w:t>[^<]*/g)||[]).map(t=>t.replace(/^<w:t[^>]*>/,'')).join('').replace(/\s+/g,' ').trim());
+        const i=cel.findIndex(t=>/^N[úu]mero de reclamo$/i.test(t));if(i>=0)num=(cel[i+1]||'').toLowerCase().replace(/\s+/g,'');
+        const j=cel.findIndex(t=>/^Cliente$/i.test(t));if(j>=0)cli=cel[j+1]||''}catch{}
+      const mn=/reclamo\s*\((\d{1,5}(?:-[a-z])?)\)/i.exec(it.nom)||/reclamo[^\d]{0,6}(\d{1,5}(?:-[a-z])?)/i.exec(it.nom);
+      const nombreNum=mn?mn[1].toLowerCase():null;
+      if(!/^\d{1,5}(-[a-z])?$/.test(num||'')){num=null}
+      const final=num||nombreNum;
+      if(!final){sinId.push({...it,cli,sug:''});continue}
+      if(num&&nombreNum&&num!==nombreNum)difiere.push(`${it.nom.split('/').pop()} → el Word dice Nº ${num}`);
+      it.cli=cli;it.origen=num?'contenido':'nombre';
+      if(!cand[final]||it.fecha>cand[final].fecha)cand[final]=it;
+      if(++leidos%40===0)o.innerHTML=`<div class="msg i">Leyendo… ${leidos} de ${items.length}</div>`}
+    const nums=Object.keys(cand).sort((a,b)=>parseInt(a)-parseInt(b)),sinRec=nums.filter(n=>!ex.has(n));
+    S.cand=cand;
+    o.innerHTML=`<div class="msg i">${items.length} Word leídos · ${nums.length} números distintos (si hay repetidos se usa el más reciente) · ${nums.length-sinRec.length} corresponden a un reclamo cargado</div>
+    ${difiere.length?`<div class="msg i"><b>${difiere.length} archivos tenían un número distinto en el nombre y en el contenido</b>: se usó el número del contenido.<br><small>${difiere.slice(0,8).map(esc).join('<br>')}${difiere.length>8?'<br>…':''}</small></div>`:''}
+    ${sinRec.length?`<div class="msg e">${sinRec.length} A.37 con un número que no está en el A.03: ${sinRec.slice(0,30).join(', ')}${sinRec.length>30?'…':''}</div>`:''}
+    ${sinId.length?`<div class="msg e"><b>${sinId.length} archivos sin número identificable.</b> Asignales el Nº a mano (opcional):<div class="scroll" style="max-height:220px"><table>${sinId.map((it,i)=>`<tr><td>${esc(it.nom.split('/').slice(-2).join(' / '))}<br><small>${esc(it.cli)}</small></td><td><input data-i="${i}" class="man" size="6" placeholder="Nº"></td></tr>`).join('')}</table></div></div>`:''}
+    <button class="b" id="g2">Subir ${nums.length-sinRec.length}</button><div id="p2"></div>`;
+    $('#g2').onclick=async()=>{$('#g2').disabled=true;const todo={...cand};
+      document.querySelectorAll('input.man').forEach(inp=>{const n=inp.value.trim().toLowerCase();if(/^\d{1,5}(-[a-z])?$/.test(n)&&ex.has(n))todo[n]=sinId[+inp.dataset.i]});
+      let ok=0;const err=[];for(const n of Object.keys(todo)){if(!ex.has(n))continue;try{await subirA37(n,await todo[n].get());ok++}catch(x){err.push(n+': '+x.message)}if(ok%10===0)$('#p2').innerHTML=`<div class="msg i">${ok} subidos…</div>`}
+      await cargar();const falta=S.datos.filter(r=>r.tipo!=='Proveedor'&&r.a37_origen!=='original').map(r=>r.numero);
+      $('#p2').innerHTML=`<div class="msg ${err.length?'e':'o'}">${ok} A.37 guardados.${err.length?'<br>'+err.map(esc).join('<br>'):''}</div><div class="msg i"><b>Reclamos de cliente que todavía no tienen su Word original: ${falta.length}</b> (igual se les puede generar el A.37 desde la plantilla).<br><small>${falta.slice(0,200).join(', ')}${falta.length>200?'…':''}</small></div>`}};
 }
 if(S.tok)cargar().then(render).catch(()=>{salir()});else render();
 </script>
