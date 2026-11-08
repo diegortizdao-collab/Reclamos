@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>A.03 Reclamos · Silver Industrial</title>
+<link rel="icon" href="data:,">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+:root{--az:#0b3a6e;--az2:#1a5fa8;--bg:#f3f5f8;--tx:#1d2733;--mu:#64748b;--ln:#d8dee7;--ok:#15803d;--mal:#b91c1c;--am:#b45309}
+*{box-sizing:border-box}body{margin:0;font:14px/1.45 -apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--tx)}
+header{background:var(--az);color:#fff;padding:10px 18px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+header h1{font-size:17px;margin:0;font-weight:600}header .sp{flex:1}header small{opacity:.8}
+nav{display:flex;gap:4px;padding:8px 18px 0;background:#fff;border-bottom:1px solid var(--ln);flex-wrap:wrap}
+nav button{border:0;background:none;padding:9px 14px;cursor:pointer;font:inherit;color:var(--mu);border-bottom:3px solid transparent}
+nav button.on{color:var(--az);border-color:var(--az2);font-weight:600}
+main{padding:16px 18px;max-width:1400px;margin:0 auto}
+.card{background:#fff;border:1px solid var(--ln);border-radius:8px;padding:14px;margin-bottom:14px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:end}
+label{display:flex;flex-direction:column;font-size:12px;color:var(--mu);gap:3px}
+input,select,textarea,button.b{font:inherit}input,select,textarea{border:1px solid var(--ln);border-radius:6px;padding:6px 8px;background:#fff;color:var(--tx)}
+textarea{width:100%;min-height:80px}
+button.b{background:var(--az2);color:#fff;border:0;border-radius:6px;padding:7px 13px;cursor:pointer}button.b.g{background:#fff;color:var(--az2);border:1px solid var(--az2)}button.b:disabled{opacity:.45;cursor:not-allowed}
+table{border-collapse:collapse;width:100%;font-size:13px}th,td{border-bottom:1px solid var(--ln);padding:6px 8px;text-align:left;vertical-align:top}th{background:#eef2f7;position:sticky;top:0;font-size:12px;color:var(--mu)}
+tr.cl{cursor:pointer}tr.cl:hover{background:#f0f6ff}
+.tag{display:inline-block;padding:1px 7px;border-radius:10px;font-size:11px;background:#e5eaf1}.tag.si{background:#fde7e7;color:var(--mal)}.tag.no{background:#e3f4e8;color:var(--ok)}.tag.pr{background:#fff1d6;color:var(--am)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}.kpi{background:#fff;border:1px solid var(--ln);border-radius:8px;padding:10px 12px}.kpi b{font-size:24px;display:block;color:var(--az)}.kpi span{font-size:12px;color:var(--mu)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:14px}
+.modal{position:fixed;inset:0;background:#0007;display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:24px 10px;z-index:9}
+.modal>div{background:#fff;border-radius:10px;max-width:880px;width:100%;padding:18px}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}@media(max-width:700px){.g2,.g3{grid-template-columns:1fr}}
+.msg{padding:8px 12px;border-radius:6px;margin:8px 0}.msg.e{background:#fde7e7;color:var(--mal)}.msg.o{background:#e3f4e8;color:var(--ok)}.msg.i{background:#e8f0fb;color:var(--az)}
+footer{text-align:center;color:var(--mu);font-size:12px;padding:18px}
+.login{max-width:360px;margin:12vh auto}.login label{margin-bottom:10px}
+.scroll{max-height:62vh;overflow:auto}
+svg text{font:11px sans-serif;fill:#475569}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<footer>Desarrollado por Mgter. Diego Ortiz — Líder de Mejora Continua | Consultor ISO</footer>
+<script src="a03.js"></script>
+<script src="a37.js"></script>
+<script>
+const API="https://nc-silver-api.diegortizdao.workers.dev/api";
+const $=s=>document.querySelector(s);
+const esc=v=>String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const S={tok:null,user:null,edita:false,datos:[],pend:[],vista:'registro',f:{q:'',anio:'',tipo:'',pert:'',nc:'',cli:''},pag:0,imp:null,msg:null};
+try{const s=JSON.parse(sessionStorage.getItem('rec')||'null');if(s&&s.expira>Date.now()){S.tok=s.token;S.user=s.usuario;S.edita=s.edita}}catch{}
+const dmy=i=>i?i.slice(8,10)+'/'+i.slice(5,7)+'/'+i.slice(0,4):'';
+const iso=d=>typeof d==='string'?d.slice(0,10):'';
+
+async function api(path,opt={}){
+  const h=Object.assign({},opt.headers||{});if(S.tok)h.Authorization='Bearer '+S.tok;
+  if(opt.json!==undefined){h['Content-Type']='application/json';opt.body=JSON.stringify(opt.json)}
+  const r=await fetch(API+path,{method:opt.method||'GET',headers:h,body:opt.body});
+  if(r.status===401&&S.tok&&!path.endsWith('/login')){salir();throw new Error('La sesión venció. Ingresá de nuevo.')}
+  if(opt.raw)return r;
+  let j=null;try{j=await r.json()}catch{}
+  if(!r.ok)throw new Error((j&&j.error)||('Error '+r.status));
+  return j;
+}
+function salir(){S.tok=null;try{sessionStorage.removeItem('rec')}catch{}render()}
+async function cargar(){S.datos=await api('/reclamos');S.pend=S.edita?await api('/reclamos/nc-pendientes').catch(()=>[]):[]}
+
+function render(){
+  const a=$('#app');
+  if(!S.tok){a.innerHTML=`<header><h1>A.03 · Registro de reclamos</h1></header><div class="card login"><h3>Ingresar</h3>
+  <label>Nombre completo<input id="ln" placeholder="Nombre y apellido" autocomplete="off"></label>
+  <label>Contraseña<input id="lp" type="password"></label><div id="lm"></div>
+  <button class="b" id="lb">Entrar</button></div>`;
+    const go=async()=>{try{const r=await api('/reclamos/login',{method:'POST',json:{nombre:$('#ln').value,password:$('#lp').value}});
+      S.tok=r.token;S.user=r.usuario;S.edita=r.edita;sessionStorage.setItem('rec',JSON.stringify(r));await cargar();render()}catch(e){$('#lm').innerHTML=`<div class="msg e">${esc(e.message)}</div>`}};
+    $('#lb').onclick=go;$('#lp').onkeydown=e=>e.key==='Enter'&&go();return}
+  const tabs=[['registro','Registro'],['panel','Panel'],...(S.edita?[['pend','NC pendientes'+(S.pend.length?' ('+S.pend.length+')':'')],['imp','Importar']]:[])];
+  a.innerHTML=`<header><h1>A.03 · Registro de reclamos — Silver Industrial</h1><span class="sp"></span><small>${esc(S.user)} · ${S.edita?'edición':'solo consulta'}</small><button class="b g" id="sal" style="background:none;color:#fff;border-color:#fff8">Salir</button></header>
+  <nav>${tabs.map(t=>`<button data-v="${t[0]}" class="${S.vista===t[0]?'on':''}">${t[1]}</button>`).join('')}</nav><main id="m"></main>`;
+  $('#sal').onclick=salir;a.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{S.vista=b.dataset.v;S.msg=null;render()});
+  ({registro:vRegistro,panel:vPanel,pend:vPend,imp:vImp})[S.vista]();
+}
+const anios=()=>[...new Set(S.datos.map(r=>iso(r.fecha).slice(0,4)))].sort().reverse();
+function filtrados(){const f=S.f,q=f.q.toLowerCase();return S.datos.filter(r=>{
+  if(f.anio&&iso(r.fecha).slice(0,4)!==f.anio)return false;if(f.tipo&&r.tipo!==f.tipo)return false;
+  if(f.pert==='s'&&r.pertinente!==true)return false;if(f.pert==='n'&&r.pertinente!==false)return false;
+  if(f.nc==='s'&&!(r.nc_numeros||[]).length)return false;if(f.nc==='n'&&(r.nc_numeros||[]).length)return false;
+  if(f.cli&&r.cliente!==f.cli)return false;
+  if(q&&!(r.numero+' '+r.cliente+' '+(r.motivo||'')+' '+(r.producto||'')+' '+(r.oti||'')+' '+(r.nc_numeros||[]).join(' ')).toLowerCase().includes(q))return false;return true})}
+const tri=v=>v===true?'<span class="tag si">Sí</span>':v===false?'<span class="tag no">No</span>':'–';
+
+function vRegistro(){
+  const clis=[...new Set(S.datos.map(r=>r.cliente))].sort((a,b)=>a.localeCompare(b));
+  const L=filtrados(),P=50,pg=Math.min(S.pag,Math.max(0,Math.ceil(L.length/P)-1)),pag=L.slice(pg*P,pg*P+P);
+  $('#m').innerHTML=`<div class="card"><div class="row">
+  <label>Buscar<input id="fq" value="${esc(S.f.q)}" placeholder="Nº, cliente, motivo, NC…"></label>
+  <label>Año<select id="fa"><option value="">Todos</option>${anios().map(y=>`<option ${S.f.anio===y?'selected':''}>${y}</option>`).join('')}</select></label>
+  <label>Cliente<select id="fc"><option value="">Todos</option>${clis.map(c=>`<option ${S.f.cli===c?'selected':''}>${esc(c)}</option>`).join('')}</select></label>
+  <label>Tipo<select id="ft"><option value="">Todos</option><option ${S.f.tipo==='Cliente'?'selected':''}>Cliente</option><option ${S.f.tipo==='Proveedor'?'selected':''}>Proveedor</option></select></label>
+  <label>Pertinente<select id="fp"><option value="">Todos</option><option value="s" ${S.f.pert==='s'?'selected':''}>Sí</option><option value="n" ${S.f.pert==='n'?'selected':''}>No</option></select></label>
+  <label>Con NC<select id="fn"><option value="">Todos</option><option value="s" ${S.f.nc==='s'?'selected':''}>Con NC</option><option value="n" ${S.f.nc==='n'?'selected':''}>Sin NC</option></select></label>
+  <span style="flex:1"></span>${S.edita?'<button class="b" id="nuevo">+ Nuevo reclamo</button>':''}<button class="b g" id="xl">Exportar Excel</button></div></div>
+  <div class="card"><div style="margin-bottom:6px;color:var(--mu)">${L.length} reclamos${L.length!==S.datos.length?' (de '+S.datos.length+')':''}</div>
+  <div class="scroll"><table><thead><tr><th>Nº</th><th>Fecha</th><th>Cliente / Proveedor</th><th>Tipo</th><th>Motivo</th><th>Pert.</th><th>Signif.</th><th>NC</th><th>A.37</th></tr></thead><tbody>
+  ${pag.map(r=>`<tr class="cl" data-n="${esc(r.numero)}"><td><b>${esc(r.numero)}</b></td><td>${dmy(iso(r.fecha))}</td><td>${esc(r.cliente)}</td><td>${r.tipo==='Proveedor'?'<span class="tag pr">Proveedor</span>':'Cliente'}</td><td>${esc((r.motivo||'').slice(0,140))}${(r.motivo||'').length>140?'…':''}</td><td>${tri(r.pertinente)}</td><td>${tri(r.significativo)}</td><td>${(r.nc_numeros||[]).join(', ')}</td><td>${r.tipo==='Proveedor'?'–':r.a37_origen==='original'?'<span class="tag no">Original</span>':'Generable'}</td></tr>`).join('')||'<tr><td colspan="9">Sin resultados</td></tr>'}
+  </tbody></table></div><div class="row" style="margin-top:8px;justify-content:center"><button class="b g" id="pa" ${pg<=0?'disabled':''}>‹</button><span>Página ${pg+1} de ${Math.max(1,Math.ceil(L.length/P))}</span><button class="b g" id="ps" ${(pg+1)*P>=L.length?'disabled':''}>›</button></div></div>`;
+  const bind=(id,k,tr)=>{$(id).onchange=$(id).oninput=e=>{S.f[k]=e.target.value;S.pag=0;if(k==='q'){const p=e.target.selectionStart;vRegistro();const i=$('#fq');i.focus();i.setSelectionRange(p,p)}else vRegistro()}};
+  bind('#fq','q');bind('#fa','anio');bind('#fc','cli');bind('#ft','tipo');bind('#fp','pert');bind('#fn','nc');
+  $('#pa').onclick=()=>{S.pag=pg-1;vRegistro()};$('#ps').onclick=()=>{S.pag=pg+1;vRegistro()};
+  document.querySelectorAll('tr.cl').forEach(t=>t.onclick=()=>abrir(t.dataset.n));
+  if($('#nuevo'))$('#nuevo').onclick=async()=>{const p=await api('/reclamos/proximo');form({numero:String(p.numero),fecha:new Date().toISOString().slice(0,10),tipo:'Cliente',nc_numeros:[],a37:{}},true)};
+  $('#xl').onclick=()=>exportarExcel(L);
+}
+function exportarExcel(L){
+  const H=['Nº','Fecha','Cliente / Proveedor','Tipo','OTI','Producto','Cantidad','Motivo','Pertinente','Significativo','Acción inmediata','Observaciones','Medio','Devolución','Cant. devuelta','NC asociadas'];
+  const t=v=>v===true?'SI':v===false?'NO':'';
+  const rows=[...L].reverse().map(r=>[r.numero,dmy(iso(r.fecha)),r.cliente,r.tipo,r.oti,r.producto,r.cantidad,r.motivo,t(r.pertinente),t(r.significativo),r.accion_inmediata,r.observaciones,r.medio,t(r.devolucion),r.cant_devuelta,(r.nc_numeros||[]).join(', ')]);
+  const ws=XLSX.utils.aoa_to_sheet([['A.03 Registro de reclamos — Silver Industrial'],[],H,...rows]);ws['!cols']=H.map((_,i)=>({wch:[6,11,26,10,12,22,10,60,10,11,50,40,14,10,12,14][i]}));
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Planilla');XLSX.writeFile(wb,'A.03 Reclamos '+new Date().toISOString().slice(0,10)+'.xlsx');
+}
+async function abrir(n){
+  const r=await api('/reclamos/'+encodeURIComponent(n)).catch(e=>alert(e.message));if(!r)return;
+  r.fecha=iso(r.fecha);form(r,false);
+}
+function modal(h){const m=document.createElement('div');m.className='modal';m.innerHTML='<div>'+h+'</div>';m.onclick=e=>{if(e.target===m)m.remove()};document.body.appendChild(m);return m}
+function form(r,nuevo){
+  const a=r.a37||{},ed=S.edita,d=ed?'':'disabled';
+  const inp=(id,l,v,t='text')=>`<label>${l}<input id="${id}" type="${t}" value="${esc(v||'')}" ${d}></label>`;
+  const sel=(id,l,v)=>`<label>${l}<select id="${id}" ${d}><option value="">–</option><option value="1" ${v===true?'selected':''}>Sí</option><option value="0" ${v===false?'selected':''}>No</option></select></label>`;
+  const nov=(a.novedades&&a.novedades.length?a.novedades:[{texto:'',fecha:''}]);
+  const m=modal(`<h3 style="margin-top:0">Reclamo ${nuevo?'nuevo':'Nº '+esc(r.numero)}</h3><div id="fm"></div>
+  <div class="g3">${inp('f_n','Nº',r.numero)}${inp('f_f','Fecha',r.fecha,'date')}<label>Tipo<select id="f_t" ${d}><option ${r.tipo==='Cliente'?'selected':''}>Cliente</option><option ${r.tipo==='Proveedor'?'selected':''}>Proveedor</option></select></label></div>
+  <div class="g2">${inp('f_c','Cliente / Proveedor',r.cliente)}${inp('f_p','Producto',r.producto)}${inp('f_o','Orden de trabajo (OTI)',r.oti)}${inp('f_q','Cantidad',r.cantidad)}</div>
+  <label>Motivo / descripción<textarea id="f_m" ${d}>${esc(r.motivo)}</textarea></label>
+  <div class="g3">${sel('f_pe','Pertinente',r.pertinente)}${sel('f_si','Significativo',r.significativo)}${inp('f_me','Medio de aviso',r.medio)}</div>
+  <div class="g3">${sel('f_dv','Devolución',r.devolucion)}${inp('f_cd','Cant. devuelta',r.cant_devuelta)}${inp('f_nc','NC asociadas (Nº separados por coma)',(r.nc_numeros||[]).join(', '))}</div>
+  <label>Acción inmediata<textarea id="f_a" ${d}>${esc(r.accion_inmediata)}</textarea></label>
+  <label>Observaciones<textarea id="f_ob" ${d}>${esc(r.observaciones)}</textarea></label>
+  <h4>Datos del A.37 ${r.tipo==='Proveedor'?'(los reclamos a proveedores no generan A.37)':''}</h4>
+  <div class="g3">${[['nota_debito','Nota de débito'],['nota_credito','Nota de crédito'],['reposicion','Reposición']].map(([k,l])=>inp('a_'+k+'_n',l+' · Nº',a[k+'_nro'])+inp('a_'+k+'_f',l+' · fecha',a[k+'_fecha'],'date')+'<span></span>').join('')}
+  ${inp('a_nd_n','Nota de débito del cliente · Nº',a.nd_cliente_nro)}${inp('a_nd_f','Nota de débito del cliente · fecha',a.nd_cliente_fecha,'date')}${inp('a_fac','Nº de factura',a.factura)}</div>
+  <label>Acciones y novedades (una por línea: AAAA-MM-DD | texto)<textarea id="a_nov" ${d}>${esc(nov.map(n=>(n.fecha||'')+' | '+(n.texto||'')).join('\n').trim()==='|'?'':nov.map(n=>(n.fecha||'')+' | '+(n.texto||'')).join('\n'))}</textarea></label>
+  <div class="row" style="margin-top:12px">${ed?'<button class="b" id="gu">Guardar</button>':''}${!nuevo&&r.tipo!=='Proveedor'?'<button class="b g" id="dl">Descargar A.37</button>':''}${!nuevo?'<button class="b g" id="hi">Historial</button>':''}${ed&&!nuevo&&r.tipo!=='Proveedor'?'<button class="b g" id="up">Reemplazar Word A.37…</button><input type="file" id="upf" accept=".docx" hidden>':''}<span style="flex:1"></span><button class="b g" id="ce">Cerrar</button></div><div id="hh"></div>`);
+  const q=s=>m.querySelector(s);q('#ce').onclick=()=>m.remove();
+  const leer=()=>{const v=id=>q(id).value.trim()||null,b=id=>q(id).value===''?null:q(id).value==='1';
+    const novs=q('#a_nov').value.split('\n').map(l=>l.trim()).filter(Boolean).map(l=>{const i=l.indexOf('|');const f=i>=0?l.slice(0,i).trim():'';return /^\d{4}-\d{2}-\d{2}$/.test(f)?{fecha:f,texto:l.slice(i+1).trim()}:{fecha:null,texto:l}});
+    const A={};[['nota_debito','nota_debito'],['nota_credito','nota_credito'],['reposicion','reposicion']].forEach(([k,i])=>{const n=v('#a_'+i+'_n'),f=v('#a_'+i+'_f');if(n)A[k+'_nro']=n;if(f)A[k+'_fecha']=f});
+    if(v('#a_nd_n'))A.nd_cliente_nro=v('#a_nd_n');if(v('#a_nd_f'))A.nd_cliente_fecha=v('#a_nd_f');if(v('#a_fac'))A.factura=v('#a_fac');if(novs.length)A.novedades=novs;
+    return{numero:v('#f_n'),fecha:v('#f_f'),tipo:q('#f_t').value,cliente:v('#f_c'),producto:v('#f_p'),oti:v('#f_o'),cantidad:v('#f_q'),motivo:v('#f_m'),pertinente:b('#f_pe'),significativo:b('#f_si'),medio:v('#f_me'),devolucion:b('#f_dv'),cant_devuelta:v('#f_cd'),
+      nc_numeros:(q('#f_nc').value.match(/\d+/g)||[]).map(Number),accion_inmediata:v('#f_a'),observaciones:v('#f_ob'),a37:A}};
+  if(q('#gu'))q('#gu').onclick=async()=>{try{const x=leer();if(nuevo)await api('/reclamos',{method:'POST',json:x});else await api('/reclamos/'+encodeURIComponent(r.numero),{method:'PUT',json:x});
+    await cargar();m.remove();render()}catch(e){q('#fm').innerHTML=`<div class="msg e">${esc(e.message)}</div>`}};
+  if(q('#dl'))q('#dl').onclick=async()=>{try{await descargarA37(Object.assign({},r,leer()))}catch(e){q('#fm').innerHTML=`<div class="msg e">${esc(e.message)}</div>`}};
+  if(q('#hi'))q('#hi').onclick=async()=>{const h=await api('/reclamos/'+encodeURIComponent(r.numero)+'/historial');q('#hh').innerHTML=`<div class="scroll" style="max-height:220px"><table><tr><th>Fecha</th><th>Usuario</th><th>Campo</th><th>Antes</th><th>Después</th></tr>${h.map(x=>`<tr><td>${esc(String(x.fecha).slice(0,16).replace('T',' '))}</td><td>${esc(x.usuario)}</td><td>${esc(x.campo)}</td><td>${esc(x.antes)}</td><td>${esc(x.despues)}</td></tr>`).join('')}</table></div>`};
+  if(q('#up')){q('#up').onclick=()=>q('#upf').click();q('#upf').onchange=async e=>{try{await subirA37(r.numero,await e.target.files[0].arrayBuffer());await cargar();q('#fm').innerHTML='<div class="msg o">Word guardado.</div>'}catch(x){q('#fm').innerHTML=`<div class="msg e">${esc(x.message)}</div>`}}}
+}
+function bajar(bytes,nombre){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([bytes],{type:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'}));a.download=nombre;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),4000)}
+async function descargarA37(r){
+  const nombre=`A.37 Informe de reclamo (${r.numero}).docx`;
+  if(r.a37_origen==='original'){const x=await api('/reclamos/'+encodeURIComponent(r.numero)+'/a37',{raw:true});if(x.ok)return bajar(await x.arrayBuffer(),nombre)}
+  const pl=await (await fetch('plantilla/A37.docx')).arrayBuffer();
+  bajar(await llenarA37(pl,r,JSZip,DOMParser,XMLSerializer),nombre);
+}
+async function subirA37(n,buf){const r=await api('/reclamos/'+encodeURIComponent(n)+'/a37',{method:'PUT',body:buf,headers:{'Content-Type':'application/octet-stream'}});return r}
+
+// ---------- NC pendientes ----------
+function vPend(){
+  $('#m').innerHTML=`<div class="card"><b>No conformidades clasificadas como reclamo (cliente o proveedor) que todavía no tienen su reclamo en el A.03</b>
+  <p style="color:var(--mu);margin:4px 0 10px">Creá el reclamo desde la NC: se precargan cliente, OTI, producto, cantidad y motivo, y queda vinculado.</p>
+  <div class="scroll"><table><thead><tr><th>NC</th><th>Fecha</th><th>Clasificación</th><th>Cliente / Proveedor</th><th>Producto</th><th>Descripción</th><th></th></tr></thead><tbody>
+  ${S.pend.map((p,i)=>`<tr><td><b>${esc(p.nc)}</b></td><td>${dmy(iso(p.fecha||p.creado_en))}</td><td>${esc(p.clasificacion)}</td><td>${esc(p.cliente)}</td><td>${esc(p.producto)}</td><td>${esc(String(p.descripcion||'').slice(0,120))}</td><td><button class="b" data-i="${i}">Crear reclamo</button></td></tr>`).join('')||'<tr><td colspan="7">No hay NC pendientes 🎉</td></tr>'}</tbody></table></div></div>`;
+  document.querySelectorAll('#m button[data-i]').forEach(b=>b.onclick=async()=>{const p=S.pend[+b.dataset.i];const n=await api('/reclamos/proximo');
+    form({numero:String(n.numero),fecha:iso(p.fecha||p.creado_en)||new Date().toISOString().slice(0,10),tipo:/prov/i.test(p.clasificacion)?'Proveedor':'Cliente',cliente:p.cliente,producto:p.producto,oti:p.oti,cantidad:p.cantidad_piezas!=null?String(p.cantidad_piezas):null,motivo:p.descripcion,devolucion:p.con_devolucion===true?true:null,nc_numeros:[Number(p.nc)],a37:{}},true)});
+}
+
+// ---------- Panel ----------
+function barras(titulo,items,col='#1a5fa8',h=18){
+  const mx=Math.max(1,...items.map(i=>i[1])),W=520,lw=150;
+  return `<div class="card"><b>${titulo}</b><svg viewBox="0 0 ${W} ${items.length*h+6}" width="100%">${items.map((it,i)=>`<text x="${lw-6}" y="${i*h+13}" text-anchor="end">${esc(String(it[0]).slice(0,24))}</text><rect x="${lw}" y="${i*h+3}" width="${(W-lw-40)*it[1]/mx}" height="${h-5}" fill="${it[2]||col}" rx="2"/><text x="${lw+(W-lw-40)*it[1]/mx+4}" y="${i*h+13}">${it[1]}</text>`).join('')}</svg></div>`;
+}
+function vPanel(){
+  const y=S.f.anio,D=S.datos.filter(r=>!y||iso(r.fecha).slice(0,4)===y),n=D.length,c=(f)=>D.filter(f).length;
+  const porAnio=anios().slice().reverse().map(a=>[a,S.datos.filter(r=>iso(r.fecha).slice(0,4)===a).length]);
+  const ME=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];const porMes=ME.map((m,i)=>[m,D.filter(r=>+iso(r.fecha).slice(5,7)===i+1).length]);
+  const cli={};D.forEach(r=>cli[r.cliente]=(cli[r.cliente]||0)+1);const top=Object.entries(cli).sort((a,b)=>b[1]-a[1]).slice(0,12);
+  const pct=(a,b)=>b?Math.round(a*100/b)+'%':'–';
+  const conNC=c(r=>(r.nc_numeros||[]).length),dev=c(r=>r.devolucion===true);
+  const rep=Object.entries(cli).filter(([k,v])=>v>=3).length;
+  $('#m').innerHTML=`<div class="card row"><label>Período<select id="pa"><option value="">Todos los años</option>${anios().map(a=>`<option ${y===a?'selected':''}>${a}</option>`).join('')}</select></label></div>
+  <div class="kpis" style="margin-bottom:14px"><div class="kpi"><b>${n}</b><span>Reclamos</span></div><div class="kpi"><b>${pct(c(r=>r.pertinente===true),n)}</b><span>Pertinentes (${c(r=>r.pertinente===true)})</span></div>
+  <div class="kpi"><b>${pct(c(r=>r.significativo===true),n)}</b><span>Significativos (${c(r=>r.significativo===true)})</span></div><div class="kpi"><b>${dev}</b><span>Con devolución (${pct(dev,n)})</span></div>
+  <div class="kpi"><b>${pct(conNC,n)}</b><span>Vinculados a una NC (${conNC})</span></div><div class="kpi"><b>${c(r=>r.tipo==='Proveedor')}</b><span>A proveedores</span></div><div class="kpi"><b>${rep}</b><span>Clientes con 3+ reclamos</span></div></div>
+  <div class="grid2">${barras('Reclamos por año',porAnio)}${barras('Reclamos por mes'+(y?' · '+y:' · todos los años'),porMes)}${barras('Clientes con más reclamos',top,'#0b3a6e')}
+  ${barras('Pertinencia y significancia',[['Pertinentes',c(r=>r.pertinente===true),'#b91c1c'],['No pertinentes',c(r=>r.pertinente===false),'#15803d'],['Significativos',c(r=>r.significativo===true),'#b45309'],['No significativos',c(r=>r.significativo===false),'#64748b'],['Con devolución',dev,'#7c3aed'],['Sin NC vinculada',n-conNC,'#94a3b8']])}</div>`;
+  $('#pa').onchange=e=>{S.f.anio=e.target.value;vPanel()};
+}
+
+// ---------- Importar ----------
+function vImp(){
+  $('#m').innerHTML=`<div class="card"><h3 style="margin-top:0">1 · Importar el A.03 (Excel)</h3><p style="color:var(--mu)">Se lee en tu navegador la hoja <b>Planilla</b>; los reclamos que ya existen no se pisan salvo que lo indiques.</p>
+  <input type="file" id="i1" accept=".xlsm,.xlsx"><div id="r1"></div></div>
+  <div class="card"><h3 style="margin-top:0">2 · Cargar los A.37 originales (Word)</h3><p style="color:var(--mu)">Elegí los .docx (o un .zip con la carpeta bajada del Drive). El número sale del nombre, ej. <i>A.37 Informe de reclamo (593).docx</i>. Si hay repetidos, se queda el más reciente.</p>
+  <input type="file" id="i2" accept=".docx,.zip" multiple><div id="r2"></div></div>`;
+  $('#i1').onchange=async e=>{const f=e.target.files[0];if(!f)return;const o=$('#r1');o.innerHTML='<div class="msg i">Leyendo…</div>';
+    try{const {reclamos,avisos}=parseA03(await f.arrayBuffer(),XLSX);const ex=new Set(S.datos.map(r=>r.numero));const nu=reclamos.filter(r=>!ex.has(r.numero));S.imp=reclamos;
+      o.innerHTML=`<div class="msg o">${reclamos.length} reclamos leídos · ${nu.length} nuevos · ${reclamos.length-nu.length} ya cargados · ${reclamos.filter(r=>r.nc_numeros.length).length} con NC detectada</div>${avisos.length?`<div class="msg e">${avisos.map(esc).join('<br>')}</div>`:''}
+      <div class="row"><button class="b" id="g1">Guardar ${nu.length} nuevos</button><label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="sb">Sobrescribir los existentes</label></div><div id="p1"></div>`;
+      $('#g1').onclick=async()=>{const sob=$('#sb').checked;const L=sob?reclamos:nu;let g=0;$('#g1').disabled=true;
+        try{for(let i=0;i<L.length;i+=300){const r=await api('/reclamos/importar',{method:'PUT',json:{reclamos:L.slice(i,i+300),sobrescribir:sob}});g+=r.guardados||0;$('#p1').innerHTML=`<div class="msg i">Guardados ${g} de ${L.length}…</div>`}
+          await cargar();$('#p1').innerHTML=`<div class="msg o">Listo: ${g} reclamos guardados.</div>`}catch(x){$('#p1').innerHTML=`<div class="msg e">${esc(x.message)}</div>`}}}
+    catch(x){o.innerHTML=`<div class="msg e">${esc(x.message)}</div>`}};
+  $('#i2').onchange=async e=>{const o=$('#r2');o.innerHTML='<div class="msg i">Preparando…</div>';const cand={};
+    const reg=(nom,fecha,get)=>{const m=/reclamo\s*\((\d{1,5}(?:-[a-z])?)\)/i.exec(nom)||/reclamo[^\d]{0,6}(\d{1,5}(?:-[a-z])?)/i.exec(nom);if(!m||/^~\$/.test(nom.split('/').pop()))return;const n=m[1].toLowerCase();if(!cand[n]||fecha>cand[n].fecha)cand[n]={nom,fecha,get}};
+    for(const f of e.target.files){
+      if(/\.zip$/i.test(f.name)){const z=await JSZip.loadAsync(await f.arrayBuffer());z.forEach((p,en)=>{if(!en.dir&&/\.docx$/i.test(p))reg(p,+en.date,()=>en.async('arraybuffer'))})}
+      else reg(f.name,f.lastModified,()=>f.arrayBuffer())}
+    const nums=Object.keys(cand).sort((a,b)=>parseInt(a)-parseInt(b));const ex=new Set(S.datos.map(r=>r.numero));
+    const sin=nums.filter(n=>!ex.has(n));
+    o.innerHTML=`<div class="msg i">${nums.length} A.37 detectados${sin.length?` · <b>${sin.length} sin reclamo en el A.03</b> (${sin.slice(0,15).join(', ')}${sin.length>15?'…':''}): importá primero el A.03`:''}</div><button class="b" id="g2">Subir ${nums.length-sin.length}</button><div id="p2"></div>`;
+    $('#g2').onclick=async()=>{$('#g2').disabled=true;let ok=0;const err=[];for(const n of nums){if(!ex.has(n))continue;try{await subirA37(n,await cand[n].get());ok++}catch(x){err.push(n+': '+x.message)}$('#p2').innerHTML=`<div class="msg i">${ok} subidos…</div>`}
+      await cargar();$('#p2').innerHTML=`<div class="msg ${err.length?'e':'o'}">${ok} A.37 guardados.${err.length?'<br>'+err.map(esc).join('<br>'):''}</div>`}};
+}
+if(S.tok)cargar().then(render).catch(()=>{salir()});else render();
+</script>
+</body>
+</html>
