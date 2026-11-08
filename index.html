@@ -216,10 +216,11 @@ function vImp(){
       let num=null,cli='';
       try{const z=await JSZip.loadAsync(await it.get());const x=await z.file('word/document.xml').async('string');
         const cel=x.split('</w:tc>').map(c=>(c.match(/<w:t[ >][^<]*|<w:t>[^<]*/g)||[]).map(t=>t.replace(/^<w:t[^>]*>/,'')).join('').replace(/\s+/g,' ').trim());
-        const i=cel.findIndex(t=>/^N[úu]mero de reclamo$/i.test(t));if(i>=0)num=(cel[i+1]||'').toLowerCase().replace(/\s+/g,'');
+        const i=cel.findIndex(t=>/^N[úu]mero de reclamo$/i.test(t));if(i>=0){const m=/(\d{1,5})\s*(?:-\s*)?([a-z])?(?![a-z0-9])/i.exec((cel[i+1]||'').replace(/[()\[\]#Nº°]/g,' '));if(m)num=m[1].replace(/^0+(?=\d)/,'')+(m[2]?'-'+m[2].toLowerCase():'')}
         const j=cel.findIndex(t=>/^Cliente$/i.test(t));if(j>=0)cli=cel[j+1]||''}catch{}
-      const mn=/reclamo\s*\((\d{1,5}(?:-[a-z])?)\)/i.exec(it.nom)||/reclamo[^\d]{0,6}(\d{1,5}(?:-[a-z])?)/i.exec(it.nom);
-      const nombreNum=mn?mn[1].toLowerCase():null;
+      const base=it.nom.split('/').pop().replace(/\.docx$/i,'');const pars=[...base.matchAll(/\(\s*(\d{1,5}(?:\s*-\s*[a-z])?)\s*\)/gi)].map(m=>m[1].replace(/\s+/g,'').toLowerCase());
+      const mn=/reclamo[^\d(]{0,6}(\d{1,5}(?:-[a-z])?)/i.exec(base);
+      const nombreNum=pars.length?pars.reduce((a,b)=>parseInt(b)>parseInt(a)?b:a):(mn?mn[1].toLowerCase():null);
       if(!/^\d{1,5}(-[a-z])?$/.test(num||'')){num=null}
       const final=num||nombreNum;
       if(!final){sinId.push({...it,cli,sug:''});continue}
