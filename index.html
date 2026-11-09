@@ -74,7 +74,7 @@ function render(){
   <button class="b" id="lb">Entrar</button></div>`;
     const go=async()=>{try{const r=await api('/reclamos/login',{method:'POST',json:{nombre:$('#ln').value,password:$('#lp').value}});
       S.tok=r.token;S.user=r.usuario;S.edita=r.edita;sessionStorage.setItem('rec',JSON.stringify(r));await cargar();render()}catch(e){$('#lm').innerHTML=`<div class="msg e">${esc(e.message)}</div>`}};
-    $('#lb').onclick=go;$('#lp').onkeydown=e=>e.key==='Enter'&&go();return}
+    $('#lb').onclick=go;$('#lp').onkeydown=e=>{if(e.key==='Enter')go()};return}
   const tabs=[['registro','Registro'],['panel','Panel'],...(S.edita?[['pend','NC pendientes'+(S.pend.length?' ('+S.pend.length+')':'')],['imp','Importar']]:[])];
   a.innerHTML=`<header><h1>A.03 · Registro de reclamos — Silver Industrial</h1><span class="sp"></span><small>${esc(S.user)} · ${S.edita?'edición':'solo consulta'}</small><button class="b g" id="sal" style="background:none;color:#fff;border-color:#fff8">Salir</button></header>
   <nav>${tabs.map(t=>`<button data-v="${t[0]}" class="${S.vista===t[0]?'on':''}">${t[1]}</button>`).join('')}</nav><main id="m"></main>`;
